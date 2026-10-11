@@ -176,11 +176,21 @@ result.custom_metric = compute_custom_metric(parsed, schema)
 
 ## OpenRouter Model Configuration
 
-The project uses OpenRouter's OpenAI-compatible API. For Jev 1.3 TypeSafe:
+The project uses OpenRouter's API with **automatic endpoint detection**:
 
-1. Find the exact model ID on OpenRouter (e.g., `nvidia/nemotron-3-ultra-550b-a55b:free` or specific Jev model)
+- **Standard models** (default): Uses `https://openrouter.ai/api/v1/chat/completions` with OpenAI-compatible format
+- **Jev models** (auto-detected): Uses `https://openrouter.ai/api/alpha/decisions` with Jev System One format
+
+The client automatically detects Jev models by checking if "jev" appears in the model ID (case-insensitive).
+
+### For Jev 1.3 TypeSafe:
+
+1. Use the correct model ID on OpenRouter (e.g., `jev-1.3-typesafe`)
 2. Set `MODEL_ID` in `.env` or pass via `--model` flag
-3. The client uses `response_format` with `json_schema` for structured output (strict mode)
+3. The client will automatically:
+   - Switch to the `/decisions` endpoint
+   - Use `input` + `schema` payload format
+   - Parse Jev's `{ "output": {...}, "usage": {...} }` response
 
 ## Troubleshooting
 

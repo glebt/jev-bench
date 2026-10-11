@@ -129,11 +129,12 @@ def discover_schemas(schema_dir: Path = Path("schemas")) -> list[SchemaTestCase]
 
 
 class OpenRouterClient:
-    """Client for calling OpenRouter API (OpenAI-compatible)."""
+    """Client for calling OpenRouter API (supports both standard and Jev endpoints)."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.base_url = "https://openrouter.ai/api/v1"
+        self.is_jev = "jev" in settings.model_id.lower()
+        self.base_url = "https://openrouter.ai/api/alpha" if self.is_jev else "https://openrouter.ai/api/v1"
         self.headers = {
             "Authorization": f"Bearer {settings.openrouter_api_key}",
             "Content-Type": "application/json",
@@ -149,6 +150,15 @@ class OpenRouterClient:
 
         Returns: (raw_response_text, usage_dict)
         """
+        if self.is_jev:
+            return await self._generate_jev(prompt, schema)
+        else:
+            return await self._generate_standard(prompt, schema)
+
+    async def _generate_standard(
+        self, prompt: str, schema: Optional[dict] = None
+    ) -> tuple[str, dict]:
+        """Standard OpenAI-compatible chat completions endpoint."""
         payload = {
             "model": self.settings.model_id,
             "messages": [{"role": "user", "content": prompt}],
@@ -156,7 +166,6 @@ class OpenRouterClient:
             "max_tokens": self.settings.max_tokens,
         }
 
-        # Add structured output if schema provided (OpenRouter supports this)
         if schema:
             payload["response_format"] = {
                 "type": "json_schema",
@@ -175,6 +184,55 @@ class OpenRouterClient:
                     data = response.json()
 
                     content = data["choices"][0]["message"]["content"]
+                    usage = data.get("usage", {})
+
+                    return content, {
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                    }
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code >= 500 and attempt < self.settings.max_retries - 1:
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+                except httpx.RequestError:
+                    if attempt < self.settings.max_retries - 1:
+                        await asyncio.sleep(2**attempt)
+                        continue
+                    raise
+
+        raise RuntimeError("Max retries exceeded")
+
+    async def _generate_jev(
+        self, prompt: str, schema: Optional[dict] = None
+    ) -> tuple[str, dict]:
+        """Jev System One endpoint - /decisions with schema-constrained generation."""
+        # Jev uses a different payload format
+        payload = {
+            "model": self.settings.model_id,
+            "input": prompt,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.max_tokens,
+        }
+
+        if schema:
+            payload["schema"] = schema
+
+        async with httpx.AsyncClient(timeout=self.settings.request_timeout) as client:
+            for attempt in range(self.settings.max_retries):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/decisions",
+                        headers=self.headers,
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+
+                    # Jev returns: { "output": {...}, "usage": {...} }
+                    content = json.dumps(data.get("output", {}))
                     usage = data.get("usage", {})
 
                     return content, {

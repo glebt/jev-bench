@@ -5,7 +5,7 @@ This file provides guidance for AI assistants (Claude Code, Codex, Hermes, etc.)
 ## Project Context
 
 - **Purpose**: Evaluate TypeSafe Jev 1.3 model on OpenRouter for structured JSON generation
-- **Model**: `nvidia/nemotron-3-ultra-550b-a55b:free` (or Jev 1.3 specific model ID on OpenRouter)
+- **Model**: Auto-detected — standard models use `/chat/completions`, Jev models use `/decisions` endpoint
 - **Primary Task**: Build evaluation harness, run benchmarks, analyze results
 
 ## Development Commands
@@ -14,10 +14,12 @@ This file provides guidance for AI assistants (Claude Code, Codex, Hermes, etc.)
 # Install dependencies
 pip install -r requirements.txt
 
-# Run evaluations
-python eval.py --all                    # All schemas
-python eval.py --schema schemas/simple.json  # Single schema
-python eval.py --help                   # Show all options
+# Run evaluations (uses subcommands)
+python eval.py evaluate --all                    # All schemas
+python eval.py evaluate --schema simple          # Single schema
+python eval.py evaluate --all --model jev-1.3-typesafe  # Jev model
+python eval.py --help                            # Show all commands
+python eval.py evaluate --help                   # Show evaluation options
 
 # Lint/format
 ruff check .
@@ -52,12 +54,23 @@ jev-bench/
 
 ## Key Libraries
 
-- `openai` / `httpx` - OpenRouter API (OpenAI-compatible)
+- `httpx` - OpenRouter API (both standard and Jev endpoints)
 - `pydantic` - Settings, request/response models
 - `jsonschema` - Schema validation
 - `rich` - CLI output
 - `pytest` - Testing
 - `ruff` - Linting/formatting
+
+## API Endpoints
+
+The `OpenRouterClient` automatically detects the endpoint based on model ID:
+
+| Model Type | Detection | Endpoint | Payload Format |
+|------------|-----------|----------|----------------|
+| Standard | Default | `https://openrouter.ai/api/v1/chat/completions` | `messages` + `response_format` |
+| Jev | "jev" in model ID | `https://openrouter.ai/api/alpha/decisions` | `input` + `schema` |
+
+Jev detection is case-insensitive (matches "jev", "Jev", "JEV", etc.).
 
 ## AI Assistant Guidelines
 
@@ -94,29 +107,33 @@ jev-bench/
 
 1. Add `.json` file to `schemas/`
 2. Add corresponding test in `tests/test_evaluator.py`
-3. Run `python eval.py --schema schemas/new.json` to verify
+3. Run `python eval.py evaluate --schema simple` to verify
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key |
-| `MODEL_ID` | No | Override default model (default: `nvidia/nemotron-3-ultra-550b-a55b:free`) |
+| `MODEL_ID` | No | Model to evaluate (default: `nvidia/nemotron-3-ultra-550b-a55b:free`; use `jev-1.3-typesafe` for Jev) |
 | `TEMPERATURE` | No | Sampling temperature (default: 0.0) |
 | `MAX_TOKENS` | No | Max completion tokens (default: 4096) |
 | `REQUEST_TIMEOUT` | No | HTTP timeout seconds (default: 60) |
+| `MAX_RETRIES` | No | Max retry attempts (default: 3) |
+| `SAVE_RAW_RESPONSES` | No | Save raw model outputs (default: false) |
+| `OUTPUT_DIR` | No | Output directory (default: results) |
+| `LOG_LEVEL` | No | Logging level (default: INFO) |
 
 ## Debugging
 
 ```bash
 # Verbose logging
-LOG_LEVEL=DEBUG python eval.py --schema schemas/simple.json
+LOG_LEVEL=DEBUG python eval.py evaluate --schema simple
 
 # Dry run (no API calls)
-python eval.py --dry-run --schema schemas/simple.json
+python eval.py evaluate --dry-run --schema simple
 
 # Save raw responses
-python eval.py --save-raw --schema schemas/simple.json
+python eval.py evaluate --save-raw --schema simple
 ```
 
 ## Git Workflow
