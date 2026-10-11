@@ -490,7 +490,7 @@ def validate_schema(schema_path: Path = _schema_arg):
     except jsonschema.SchemaError as e:
         console.print(f"[red]✗[/red] Invalid schema: {e}")
         raise typer.Exit(1) from None
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         console.print(f"[red]✗[/red] Error: {e}")
         raise typer.Exit(1) from None
 
