@@ -12,15 +12,18 @@ This project evaluates the **TypeSafe Jev 1.3** model via **OpenRouter.ai** for 
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 # Set up environment
 cp .env.example .env
 # Edit .env with your OPENROUTER_API_KEY
 
-# Run evaluation
-python eval.py
-```
+# Run help
+python3 eval.py --help 
+
+# run evaluate all
+python3 eval.py evaluate --all
+
 
 ## Project Structure
 
@@ -71,8 +74,7 @@ python eval.py --schema schemas/simple.json
 python eval.py --model jev-1.3-typesafe --schema schemas/complex.json
 ```
 
-ß## Results
-
+## Results
 Results are saved to `results/` as JSONL files with timestamps for comparison across runs.
 
 ## License
